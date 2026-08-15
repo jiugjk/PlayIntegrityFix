@@ -8,7 +8,7 @@ namespace pif {
     struct Config {
         std::unordered_map<std::string, std::string> propMap;
         bool spoofBuild = true;
-        bool spoofProps = true;
+        bool spoofProps = false;
         bool spoofProvider = false;
         bool spoofSignature = false;
         bool debug = false;
@@ -16,7 +16,7 @@ namespace pif {
         std::string securityPatch;
         std::string buildId;
         bool spoofVendingSdk = false;
-        bool spoofVendingBuild = false;
+        bool spoofVendingBuild = true;
 
         [[nodiscard]] bool needsDex() const {
             return spoofProvider || spoofSignature;

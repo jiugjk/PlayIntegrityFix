@@ -6,6 +6,8 @@ export const PIF_PROP_DEFAULT_PATH = `${MODDIR}/pif.prop`
 export const PIF_PROP_CUSTOM_PATH = '/data/adb/pif.prop'
 export const SCRIPT_ONLY_FLAG = '/data/adb/pif_script_only'
 export const AUTO_SECURITY_PATCH_FLAG = '/data/adb/tricky_store/pif_auto_security_patch'
+export const ROOT_BIN_PATH =
+  '/data/adb/ap/bin:/data/adb/ksu/bin:/data/adb/magisk:/system/bin:/system/xbin'
 
 export const GITHUB_CDN = `https://fastly.jsdelivr.net/gh/${REPOSITORY}`
 export const GITHUB_RAW = `https://raw.githubusercontent.com/${REPOSITORY}`

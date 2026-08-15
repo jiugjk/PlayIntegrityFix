@@ -31,6 +31,7 @@ export default function FetchDialog({
   onDeviceSelect,
   updater,
   pifConfig,
+  terminal,
   onConfigValuesChange,
   onDismiss,
 }: FetchDialogProps) {
@@ -59,11 +60,13 @@ export default function FetchDialog({
   const handleConfirmFetch = useCallback(async () => {
     if (!selectedDevice || !updater) return
     localDialogRef.current?.close()
+    terminal.setShellRunning(true)
     try {
       await updater.github(selectedDevice.product)
+      Cli.killGms()
     } catch { /* handled in Update */ }
-    Cli.killGms()
-  }, [selectedDevice, updater])
+    terminal.setShellRunning(false)
+  }, [selectedDevice, updater, terminal])
 
   // Scroll selected device into view
   const scrollSelectedIntoView = useCallback(() => {

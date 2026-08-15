@@ -81,7 +81,7 @@ export class Update {
 
     const opts: Record<string, unknown> = {}
     if (model && product) {
-      opts.env = { MODEL: `"${model}"`, PRODUCT: `"${product}"` }
+      opts.env = { MODEL: model, PRODUCT: product }
     }
 
     const scriptOutput = Cli.runAutopifScript(opts)
@@ -123,8 +123,11 @@ export class Update {
   async #selfUpdate(): Promise<void> {
     try {
       const scriptOutput = Cli.runAutopifOta()
-      scriptOutput.stdout.on('data', (data: string) => this.#terminal.output(data))
-      scriptOutput.stderr.on('data', (data: string) => this.#terminal.output(data, true))
+      scriptOutput.stdout.on('data', (data: string) => {
+        if (/updated|failed|skipping/i.test(data)) {
+          this.#terminal.output(data)
+        }
+      })
     } catch { /* background update failure is non-fatal */ }
   }
 }

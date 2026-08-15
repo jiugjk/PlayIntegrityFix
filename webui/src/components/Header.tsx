@@ -2,24 +2,29 @@ import { useEffect, useState } from 'react'
 import { Cli } from '../lib/Cli'
 
 interface HeaderProps {
+  version?: string
   onHelpClick: () => void
 }
 
-export default function Header({ onHelpClick }: HeaderProps) {
-  const [version, setVersion] = useState('v4.7-dev')
+export default function Header({ version, onHelpClick }: HeaderProps) {
+  const [resolvedVersion, setResolvedVersion] = useState(version || '')
 
   useEffect(() => {
+    if (version) {
+      setResolvedVersion(version)
+      return
+    }
     Cli.loadVersion().then((v) => {
-      if (v) setVersion(v)
+      if (v) setResolvedVersion(v)
     })
-  }, [])
+  }, [version])
 
   return (
     <div className="w-full flex items-center justify-between h-header shrink-0 px-4 box-border select-none h-16">
       <div className='text-xl flex flex-row items-baseline gap-2'>
         Play Integrity Fix
-        {version && (
-          <span className="text-sm text-outline">{version}</span>
+        {resolvedVersion && (
+          <span className="text-sm text-outline">{resolvedVersion}</span>
         )}
       </div>
       <md-icon-button onClick={onHelpClick}>

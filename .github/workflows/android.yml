@@ -48,16 +48,23 @@ jobs:
       run: chmod +x gradlew
 
     - name: Build with Gradle
-      run: ./gradlew assembleRelease
+      run: ./gradlew assembleRelease zip
+
+    - name: Assert module artifacts
+      run: |
+        test -f module/webroot/index.html
+        test -f module/classes.dex
+        ls module/zygisk/*.so
+        test -f out/PlayIntegrityFix.zip
 
     - name: Setup variables
       run: |
         VERSION=$(jq -r '.version' update.json)
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-    - name: Upload CI module zip as artifact zip
+    - name: Upload CI module zip
       uses: actions/upload-artifact@v7
       with:
-        name: PlayIntegrityFix_${{ env.VERSION }}-inject-s_${{ github.run_number }}
-        path: 'module/*'
+        name: PlayIntegrityFix_${{ env.VERSION }}_${{ github.run_number }}
+        path: out/PlayIntegrityFix.zip
         compression-level: 9

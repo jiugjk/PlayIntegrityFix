@@ -50,8 +50,8 @@ export class I18n {
     for (let i = 0; i < strings.length; i++) {
       const string = strings[i]
       const name = string.getAttribute('name')
-      const value = string.textContent
-      if (name) translations[name] = value ?? ''
+      const value = (string.textContent ?? '').replace(/\\'/g, "'")
+      if (name) translations[name] = value
     }
 
     return translations
@@ -65,7 +65,8 @@ export class I18n {
     const langCode = userLang.split('-')[0]
 
     try {
-      const availableResponse = await fetch('locales/languages.json')
+      const availableResponse = await fetch('./locales/languages.json')
+      if (!availableResponse.ok) throw new Error('languages.json')
       const availableData = await availableResponse.json()
       this.availableLanguages = Object.keys(availableData)
 
@@ -83,14 +84,17 @@ export class I18n {
   async loadTranslations(lang?: string): Promise<void> {
     try {
       const baseResponse = await fetch('./locales/strings/en.xml')
+      if (!baseResponse.ok) throw new Error('en.xml')
       const baseXML = await baseResponse.text()
       this.baseTranslations = this.parseTranslationsXML(baseXML)
 
       if (!lang) lang = await this.detectUserLanguage()
       this.lang = lang
+      document.documentElement.lang = lang
 
       if (lang !== 'en') {
-        const response = await fetch(`locales/strings/${lang}.xml`)
+        const response = await fetch(`./locales/strings/${lang}.xml`)
+        if (!response.ok) throw new Error(`${lang}.xml`)
         const userXML = await response.text()
         const userTranslations = this.parseTranslationsXML(userXML)
         this.translations = { ...this.baseTranslations, ...userTranslations }

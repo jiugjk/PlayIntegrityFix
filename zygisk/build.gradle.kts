@@ -11,6 +11,9 @@ tasks.register("generateModulePropChecksum") {
     val propFile = project.rootDir.resolve("module/module.prop")
     val checksumHeader = project.projectDir.resolve("src/main/cpp/checksum.h")
 
+    inputs.file(propFile)
+    outputs.file(checksumHeader)
+
     doLast {
         val bytes = propFile.readBytes()
         val crc = CRC32()

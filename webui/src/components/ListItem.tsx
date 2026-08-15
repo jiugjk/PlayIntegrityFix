@@ -12,7 +12,10 @@ interface ListItemProps {
 }
 
 export default function ListItem({ leading, children, trailing, className = '', onClick, disabled, index, count }: ListItemProps) {
-  const handleClick = () => onClick?.()
+  const handleClick = () => {
+    if (disabled) return
+    onClick?.()
+  }
 
   const roundedClass = getRoundedClass(index, count)
 

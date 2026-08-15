@@ -3,6 +3,7 @@
 # Tricky Store Security Patch Util
 
 MODDIR="/data/adb/modules/playintegrityfix"
+. "$MODDIR/common_func.sh"
 AUTO_FLAG="/data/adb/tricky_store/pif_auto_security_patch"
 
 case "$1" in
@@ -68,11 +69,11 @@ ro.build.version.security_patch=$SECURITY_PATCH
 ro.vendor.build.security_patch=$SECURITY_PATCH
 EOF
 
-if resetprop --help | grep "compact" > /dev/null; then
+if resetprop_supports_compact; then
     PROPS="ro.build.version.security_patch ro.vendor.build.security_patch"
     for PROP in $PROPS; do
         resetprop -n "$PROP" "$SECURITY_PATCH"
-        resetprop -c $(resetprop -Z "$PROP") >/dev/null 2>&1 || true
+        resetprop_apply_compact "$PROP"
     done
-    resetprop -c >/dev/null 2>&1 || true
+    resetprop_apply_compact
 fi

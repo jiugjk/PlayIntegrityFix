@@ -194,6 +194,7 @@ public final class EntryPoint {
                 if (value.isBlank()) {
                     Log.w(TAG, "Field '" + key + "' have an empty value!");
                 } else {
+                    field.setAccessible(true);
                     map.put(field, value);
                 }
             } catch (Throwable t) {
@@ -209,15 +210,11 @@ public final class EntryPoint {
     public static void spoofFields() {
         map.forEach((field, value) -> {
             try {
-                field.setAccessible(true);
                 String oldValue = (String) field.get(null);
                 if (value.equals(oldValue)) {
-                    field.setAccessible(false);
                     return;
                 }
                 field.set(null, value);
-                field.setAccessible(false);
-                Log.i(TAG, "Set '" + field.getName() + "' to '" + value + "'");
             } catch (Throwable t) {
                 Log.e(TAG, "spoofFields", t);
             }

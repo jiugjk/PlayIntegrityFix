@@ -18,8 +18,16 @@ fi
 
 # Conditional late sensitive properties
 
+# Prefer a native wait if resetprop documents -w/--wait. Always confirm the
+# value afterwards so we never treat "property exists" as boot completed.
+if resetprop --help 2>/dev/null | grep -qE -- '-w|--wait'; then
+    resetprop -w sys.boot_completed 1 >/dev/null 2>&1 || true
+fi
+i=0
 until [ "$(getprop sys.boot_completed)" = "1" ]; do
-    sleep 1
+    i=$((i + 1))
+    [ "$i" -ge 120 ] && break
+    sleep 2
 done
 
 # SafetyNet/Play Integrity + OEM

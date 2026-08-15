@@ -3,51 +3,61 @@
 PATH=/data/adb/ap/bin:/data/adb/ksu/bin:/data/adb/magisk:/data/data/com.termux/files/usr/bin:$PATH
 MODDIR=/data/adb/modules/playintegrityfix
 
-# lets try to use tmpfs for processing
-TEMPDIR="$MODDIR/temp" #fallback
-[ -w /sbin ] && TEMPDIR="/sbin/playintegrityfix"
-[ -w /debug_ramdisk ] && TEMPDIR="/debug_ramdisk/playintegrityfix"
-[ -w /dev ] && TEMPDIR="/dev/playintegrityfix"
-mkdir -p "$TEMPDIR"
+. "$MODDIR/common_func.sh"
 
-download() { busybox wget -T 10 --no-check-certificate -qO - "$1" > "$2"; }
-if command -v curl > /dev/null 2>&1; then
-    download() { curl --connect-timeout 10 -Ls "$1" > "$2"; }
+setup_tempdir
+OTA_DIR="$TEMPDIR/ota"
+OTA_STAMP="$MODDIR/autopif_ota.stamp"
+mkdir -p "$OTA_DIR"
+
+# Skip if we already checked recently (default 24h). Not a boot path.
+if [ -f "$OTA_STAMP" ]; then
+    now="$(date +%s 2>/dev/null)"
+    prev="$(date -r "$OTA_STAMP" +%s 2>/dev/null)"
+    if [ -z "$prev" ]; then
+        prev="$(busybox stat -c %Y "$OTA_STAMP" 2>/dev/null)"
+    fi
+    if [ -n "$now" ] && [ -n "$prev" ] && [ $((now - prev)) -lt "$OTA_COOLDOWN_SEC" ]; then
+        exit 0
+    fi
 fi
 
-# fetch script
-fetch_autopif() {
-    if download "$1" "$TEMPDIR/temp_autopif.sh"; then
-        if ! grep -q "^#!/bin/sh" $TEMPDIR/temp_autopif.sh; then
-            return 1
-        fi
+acquire_pif_lock || exit 0
 
-        # hash
-        curhash="$(cat $MODDIR/autopif.sh | busybox crc32)"
-        newhash="$(cat $TEMPDIR/temp_autopif.sh | busybox crc32)"
-
-        if [ ! "$newhash" = "$curhash" ]; then
-            cat "$TEMPDIR/temp_autopif.sh" > "$MODDIR/autopif.sh"
-            echo "[+] autopif has been updated"
-        fi
-
-        return 0
-    else
-        return 1
-    fi
+script_looks_valid() {
+    [ -s "$1" ] || return 1
+    grep -q "^#!/bin/sh" "$1" || return 1
+    grep -q "PlayIntegrityFix" "$1" || return 1
+    grep -q "set_random_beta" "$1" || return 1
+    grep -q "FINGERPRINT=" "$1" || return 1
+    size="$(wc -c < "$1" | tr -d ' ')"
+    [ -n "$size" ] && [ "$size" -gt 1000 ] && [ "$size" -lt 200000 ]
 }
 
-main_link="https://raw.githubusercontent.com/KOWX712/PlayIntegrityFix/inject_s/module/autopif.sh"
-fallback_link="https://raw.gitmirror.com/KOWX712/PlayIntegrityFix/inject_s/module/autopif.sh"
+fetch_autopif() {
+    if ! download_github "$PIF_BRANCH" "module/autopif.sh" "$OTA_DIR/temp_autopif.sh"; then
+        return 1
+    fi
+    if ! script_looks_valid "$OTA_DIR/temp_autopif.sh"; then
+        echo "[!] OTA payload rejected"
+        return 1
+    fi
 
-if fetch_autopif "$main_link"; then
-    true
-elif fetch_autopif "$fallback_link"; then
-    true
+    curhash="$(busybox crc32 "$MODDIR/autopif.sh" 2>/dev/null || cat "$MODDIR/autopif.sh" | busybox crc32)"
+    newhash="$(busybox crc32 "$OTA_DIR/temp_autopif.sh" 2>/dev/null || cat "$OTA_DIR/temp_autopif.sh" | busybox crc32)"
+
+    if [ -n "$newhash" ] && [ ! "$newhash" = "$curhash" ]; then
+        cat "$OTA_DIR/temp_autopif.sh" > "$MODDIR/autopif.sh.tmp" && mv -f "$MODDIR/autopif.sh.tmp" "$MODDIR/autopif.sh"
+        chmod +x "$MODDIR/autopif.sh"
+        echo "[+] autopif has been updated"
+    fi
+    return 0
+}
+
+if fetch_autopif; then
+    touch "$OTA_STAMP"
 else
     echo "[!] OTA failed, skipping autopif update."
 fi
 
-rm -rf "$TEMPDIR"
-
-# EOF
+rm -rf "$OTA_DIR"

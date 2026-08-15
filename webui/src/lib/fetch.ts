@@ -6,11 +6,9 @@
 export async function fallbackFetch(urls: string[]): Promise<Response> {
   for (const url of urls) {
     try {
-      const res = await fetch(url)
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
       if (res.ok) return res
     } catch (e) {
-      // Log the first error for debugging, but don't stop execution
-      // in case the next URL works
       console.warn(`Failed to fetch ${url}:`, e)
     }
   }

@@ -16,16 +16,24 @@ import HelpDialog from './components/dialog/HelpDialog'
 import type { MdDialog } from '@material/web/dialog/dialog.js'
 import { spoofConfig } from './data/spoofConfig'
 import { PROP } from './lib/PROP'
-import type { DeviceInfo, OutputLine } from './types'
+import type { DeviceInfo } from './types'
 import { AUTO_SECURITY_PATCH_FLAG, SCRIPT_ONLY_FLAG } from './constant'
 import { useHistory } from './hooks/useHistory'
+
+function configToBoolMap(pc: PifConfig): Record<string, boolean> {
+  const boolMap: Record<string, boolean> = {}
+  spoofConfig.forEach(item => {
+    boolMap[item.config] = !!pc.getConfig(item.config)
+  })
+  return boolMap
+}
 
 export default function App() {
   const [terminal] = useState(() => new Terminal())
   const [pifConfig, setPifConfig] = useState<PifConfig | null>(null)
   const [updater, setUpdater] = useState<Update | null>(null)
+  const [moduleVersion, setModuleVersion] = useState('')
 
-  const [, setOutputLines] = useState<OutputLine[]>(terminal.lines)
   const [configValues, setConfigValues] = useState<Record<string, boolean>>({})
   const [devices, setDevices] = useState<DeviceInfo[]>([])
   const [selectedDevice, setSelectedDevice] = useState<DeviceInfo | null>(null)
@@ -40,14 +48,8 @@ export default function App() {
   const initialDeviceRef = useRef<string | null>(null)
   const history = useHistory()
 
-  // Subscribe to terminal changes
   useEffect(() => {
-    const unsubLines = terminal.subscribe(setOutputLines)
-    const unsubShell = terminal.onShellStateChange(setShellRunning)
-    return () => {
-      unsubLines()
-      unsubShell()
-    }
+    return terminal.onShellStateChange(setShellRunning)
   }, [terminal])
 
   const [translationRev, bumpTranslationRev] = useState(0)
@@ -55,57 +57,58 @@ export default function App() {
     return i18n.subscribe(() => bumpTranslationRev(n => n + 1))
   }, [])
 
-  // Init on mount
   useEffect(() => {
     const init = async () => {
-      // Load translations first (needed for UI labels)
       await i18n.loadTranslations()
-      // Init PifConfig (reads config in constructor, resets on failure)
-      const pc = new PifConfig(terminal)
-      setPifConfig(pc)
-      await pc.waitForInit()
 
-      // Init Update (starts autopif OTA in constructor)
+      let pc: PifConfig
+      try {
+        const state = await Cli.loadInitState()
+        setModuleVersion(state.version)
+        pc = new PifConfig(terminal, state.pifContent)
+        setPifConfig(pc)
+        await pc.waitForInit()
+        setConfigValues(configToBoolMap(pc))
+
+        const modelVal = pc.config.MODEL
+        if (modelVal) initialDeviceRef.current = String(modelVal)
+
+        if (state.tampered) setShowWarning(true)
+
+        setSecurityPatch({
+          supported: state.trickyStoreSupported,
+          enabled: state.trickyStoreSupported && state.autoSecurityPatch,
+        })
+        if (!state.trickyStoreSupported) {
+          await File.delete(AUTO_SECURITY_PATCH_FLAG).catch(() => {})
+        }
+
+        setScriptOnly(state.scriptOnly)
+
+        if (state.selinux === 'Permissive') {
+          terminal.output('[!] ' + i18n.t('output_selinux_permissive'), true)
+        }
+        if (state.propOutdated) {
+          terminal.output('[!] ' + i18n.t('output_oudated_pif_prop'), true)
+        }
+        if (state.romSignature) {
+          const spoofSig = pc.getConfig('spoofSignature')
+          if (state.romSignature === 'testkey' && !spoofSig) {
+            terminal.output('[!] ' + i18n.t('output_testkey'))
+          } else if (state.romSignature === 'releasekey' && spoofSig) {
+            terminal.output('[+] ' + i18n.t('output_releasekey'))
+          }
+        }
+      } catch {
+        pc = new PifConfig(terminal)
+        setPifConfig(pc)
+        await pc.waitForInit()
+        setConfigValues(configToBoolMap(pc))
+      }
+
       const up = new Update(terminal, pc)
       setUpdater(up)
 
-      // Read config values for UI
-      const boolMap: Record<string, boolean> = {}
-      spoofConfig.forEach(item => {
-        boolMap[item.config] = !!pc.getConfig(item.config)
-      })
-      setConfigValues(boolMap)
-
-      const modelVal = pc.config.MODEL
-      if (modelVal) {
-        initialDeviceRef.current = String(modelVal)
-      }
-
-      // Tampered check
-      try {
-        const tampered = await Cli.checkTampered()
-        if (tampered) setShowWarning(true)
-      } catch { /* ignore */ }
-
-      // Auto security patch
-      try {
-        const tsDir = await File.isDirectory('/data/adb/modules/tricky_store')
-        const tsDisabled = await File.exist('/data/adb/modules/tricky_store/disable')
-        const supported = tsDir && !tsDisabled
-        const enabled = supported && await File.exist(AUTO_SECURITY_PATCH_FLAG)
-
-        setSecurityPatch({ supported, enabled })
-        if (!supported) await File.delete(AUTO_SECURITY_PATCH_FLAG).catch(() => {})
-      } catch { /* ignore */ }
-
-      // Script only
-      try {
-        const so = await File.exist(SCRIPT_ONLY_FLAG)
-        setScriptOnly(so)
-        if (so) terminal.setShellRunning(true)
-      } catch { /* ignore */ }
-
-      // Device list
       try {
         const devs = await up.fetchDeviceList()
         setDevices(devs)
@@ -115,40 +118,14 @@ export default function App() {
           const match = devs.find(d => d.model === initialDeviceRef.current || d.product === initialDeviceRef.current)
           if (match) setSelectedDevice(match)
         }
-      } catch { setDeviceListError(true) }
-
-      // Notifications
-      try {
-        const selinux = await Cli.checkSELinux()
-        if (selinux === 'Permissive') {
-          terminal.output('[!] ' + i18n.t('output_selinux_permissive'), true)
-        }
-      } catch { /* ignore */ }
-
-      try {
-        const outdated = await Cli.checkPropDate()
-        if (outdated === 'outdated') {
-          terminal.output('[!] ' + i18n.t('output_oudated_pif_prop'), true)
-        }
-      } catch { /* ignore */ }
-
-      try {
-        const sig = await Cli.checkRomSignature()
-        if (sig) {
-          const spoofSig = pc.getConfig('spoofSignature')
-          if (sig === 'testkey' && !spoofSig) {
-            terminal.output('[!] ' + i18n.t('output_testkey'))
-          } else if (sig === 'releasekey' && spoofSig) {
-            terminal.output('[+] ' + i18n.t('output_releasekey'))
-          }
-        }
-      } catch { /* ignore */ }
+      } catch {
+        setDeviceListError(true)
+      }
     }
 
     init()
   }, [terminal])
 
-  // Spoof config toggle
   const handleToggle = useCallback(async (config: string, value: boolean) => {
     if (shellRunning || scriptOnly) return
     const pc = pifConfig
@@ -161,9 +138,9 @@ export default function App() {
       setConfigValues(prev => ({ ...prev, [config]: value }))
       if (config === 'spoofSignature') {
         const sig = await Cli.checkRomSignature()
-        if (sig === 'testkey' && value) {
+        if (sig === 'testkey' && !value) {
           terminal.output('[!] ' + i18n.t('output_testkey'))
-        } else if (sig === 'releasekey' && !value) {
+        } else if (sig === 'releasekey' && value) {
           terminal.output('[+] ' + i18n.t('output_releasekey'))
         }
       }
@@ -176,13 +153,11 @@ export default function App() {
     terminal.setShellRunning(false)
   }, [shellRunning, scriptOnly, terminal, pifConfig])
 
-  // Action: show device dialog
   const handleFetch = useCallback(() => {
     deviceDialogRef.current?.show()
     history.push('dialog-fetch', () => deviceDialogRef.current?.close())
   }, [history])
 
-  // Action: view pif.prop
   const handleView = useCallback(async () => {
     const pc = pifConfig
     if (!pc) return
@@ -195,7 +170,6 @@ export default function App() {
     }
   }, [terminal, pifConfig])
 
-  // Security patch toggle
   const handleSecurityPatchToggle = useCallback(async (enabled: boolean) => {
     try {
       await Cli.toggleAutoSecurityPatch(enabled)
@@ -204,7 +178,6 @@ export default function App() {
     } catch { /* ignore */ }
   }, [terminal])
 
-  // Script only toggle
   const handleScriptOnlyToggle = useCallback(async (enabled: boolean) => {
     try {
       if (enabled) {
@@ -215,24 +188,22 @@ export default function App() {
       Cli.killGms()
       const isEnabled = await File.exist(SCRIPT_ONLY_FLAG)
       setScriptOnly(isEnabled)
-      terminal.setShellRunning(isEnabled)
       terminal.output(`[+] ${isEnabled ? i18n.t('output_enabled') : i18n.t('output_disabled')} script only mode.`)
     } catch { /* ignore */ }
   }, [terminal])
 
-  // Help button
   const handleHelpClick = useCallback(() => {
     helpDialogRef.current?.show()
     history.push('dialog-help', () => helpDialogRef.current?.close())
   }, [history])
 
-  const isDisabled = shellRunning
+  const isDisabled = shellRunning || scriptOnly
+  void translationRev
 
   return (
-    <Layout header={<Header onHelpClick={handleHelpClick} />}>
+    <Layout header={<Header version={moduleVersion} onHelpClick={handleHelpClick} />}>
       <div className="w-full max-w-200 mx-auto landscape:flex-1 landscape:max-w-none landscape:mx-0 landscape:flex landscape:flex-col landscape:overflow-y-auto landscape:min-h-0">
         <FilterGroup
-          key={translationRev}
           onFetch={handleFetch}
           onView={handleView}
           securityPatch={securityPatch}
@@ -241,7 +212,6 @@ export default function App() {
           onScriptOnlyToggle={handleScriptOnlyToggle}
           disabled={isDisabled}
         />
-        {/* SpoofConfig toggles */}
         <div className="w-full max-w-200 landscape:max-w-none flex flex-col gap-0.5">
           {spoofConfig.map((item, index) => (
             <SwitchItem
@@ -260,9 +230,8 @@ export default function App() {
         <div className='hidden landscape:block pb-4 shrink-0' />
         <div className='hidden landscape:block pb-safe shrink-0' />
       </div>
-      <TerminalView key={translationRev} terminal={terminal} />
+      <TerminalView terminal={terminal} />
 
-      {/* Dialogs */}
       {showWarning && (
         <WarningDialog />
       )}

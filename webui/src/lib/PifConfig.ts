@@ -16,9 +16,9 @@ export class PifConfig {
   #terminal: Terminal
   #initPromise: Promise<void>
 
-  constructor(terminal: Terminal) {
+  constructor(terminal: Terminal, seededContent?: string) {
     this.#terminal = terminal
-    this.#initPromise = this.#init()
+    this.#initPromise = this.#init(seededContent)
   }
 
   /** Wait for async constructor init to complete */
@@ -75,14 +75,27 @@ export class PifConfig {
     await this.write()
   }
 
-  async #init(): Promise<void> {
+  async #init(seededContent?: string): Promise<void> {
     try {
+      if (seededContent && seededContent.trim()) {
+        this.#config = this.#hydrate(PROP.parse(seededContent))
+        return
+      }
       this.#config = await this.#loadFromFile()
     } catch {
       this.#terminal.output('[!] ' + i18n.t('output_error_load_spoof_config'), true)
       this.#terminal.output('[!] ' + i18n.t('output_warning_third_party_tools'), true)
       await this.#reset()
     }
+  }
+
+  #hydrate(map: PifPropMap): PifPropMap {
+    for (const item of spoofConfig) {
+      if (!(item.config in map)) {
+        map[item.config] = false
+      }
+    }
+    return map
   }
 
   async #loadFromFile(): Promise<PifPropMap> {
@@ -92,14 +105,7 @@ export class PifConfig {
     } else {
       content = await File.read(PIF_PROP_DEFAULT_PATH)
     }
-    const map = PROP.parse(content)
-    // Ensure all spoofConfig fields exist, default to false if missing
-    for (const item of spoofConfig) {
-      if (!(item.config in map)) {
-        map[item.config] = false
-      }
-    }
-    return map
+    return this.#hydrate(PROP.parse(content))
   }
 
   async #reset(): Promise<void> {
