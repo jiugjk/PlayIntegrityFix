@@ -16,8 +16,9 @@ resetprop_if_match() {
     [[ "$(resetprop "$NAME")" = *"$CONTAINS"* ]] && resetprop -n "$NAME" "$VALUE"
 }
 
-# Cache compact-mode detection for this script invocation.
+# Cache compact/rebuild-mode detection for this script invocation.
 _RESETPROP_COMPACT=""
+_RESETPROP_REBUILD=""
 
 resetprop_supports_compact() {
     if [ -z "$_RESETPROP_COMPACT" ]; then
@@ -30,15 +31,26 @@ resetprop_supports_compact() {
     [ "$_RESETPROP_COMPACT" = "1" ]
 }
 
-# resetprop_apply_compact [prop]
-# Re-bind a single prop context, or compact the whole table when no arg is given.
-resetprop_apply_compact() {
-    if ! resetprop_supports_compact; then
-        return 0
+resetprop_supports_rebuild() {
+    if [ -z "$_RESETPROP_REBUILD" ]; then
+        if resetprop --help 2>/dev/null | grep -q rebuild; then
+            _RESETPROP_REBUILD=1
+        else
+            _RESETPROP_REBUILD=0
+        fi
     fi
+    [ "$_RESETPROP_REBUILD" = "1" ]
+}
+
+# resetprop_apply_compact [prop]
+# Re-bind a single prop context (needs rebuild support), or compact the whole
+# table when no arg is given (needs compact support).
+resetprop_apply_compact() {
     if [ -n "$1" ]; then
+        resetprop_supports_rebuild || return 0
         resetprop -c $(resetprop -Z "$1") >/dev/null 2>&1 || true
     else
+        resetprop_supports_compact || return 0
         resetprop -c >/dev/null 2>&1 || true
     fi
 }

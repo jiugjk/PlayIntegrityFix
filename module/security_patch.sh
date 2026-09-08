@@ -69,8 +69,9 @@ ro.build.version.security_patch=$SECURITY_PATCH
 ro.vendor.build.security_patch=$SECURITY_PATCH
 EOF
 
-if resetprop_supports_compact; then
-    PROPS="ro.build.version.security_patch ro.vendor.build.security_patch"
+PROPS="ro.build.version.security_patch ro.vendor.build.security_patch"
+
+if resetprop_supports_compact || resetprop_supports_rebuild; then
     for PROP in $PROPS; do
         resetprop -n "$PROP" "$SECURITY_PATCH"
         resetprop_apply_compact "$PROP"
