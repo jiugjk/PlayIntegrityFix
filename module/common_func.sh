@@ -138,5 +138,6 @@ download_github() {
     download_try "https://fastly.jsdelivr.net/gh/${PIF_REPO}@${branch}/${path}" "$dest" && return 0
     download_try "https://raw.githubusercontent.com/${PIF_REPO}/${branch}/${path}" "$dest" && return 0
     download_try "https://raw.gitmirror.com/${PIF_REPO}/${branch}/${path}" "$dest" && return 0
+    download_try "https://gh.sevencdn.com/https://raw.githubusercontent.com/${PIF_REPO}/${branch}/${path}" "$dest" && return 0
     return 1
 }
