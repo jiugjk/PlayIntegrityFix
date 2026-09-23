@@ -15,7 +15,7 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ (github.actor == 'jiugjk' && github.repository_owner == 'jiugjk') && fromJSON('["self-hosted", "fast-tmpfs"]') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
 
     steps:
     - name: Check out
