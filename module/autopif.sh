@@ -66,7 +66,7 @@ get_model_product_list() {
 
 scrape_device_lists() {
 	download https://developer.android.com/about/versions PIXEL_VERSIONS_HTML
-	LATEST_BETA=$(grep -B4 -A2 'data-icon=\"preview' PIXEL_VERSIONS_HTML | grep -o 'href="/about/versions/.*[0-9]"' | cut -d\" -f2)
+	LATEST_BETA=$(grep -B4 -A2 'data-icon="preview' PIXEL_VERSIONS_HTML | grep -o 'href="/about/versions/.*[0-9]"' | cut -d\" -f2)
 	[ "$LATEST_BETA" ] || LATEST_BETA=$(grep -oE 'href="/about/versions/[0-9]{2}"' PIXEL_VERSIONS_HTML | cut -d\" -f2 | sort -ru | head -n1)
 	[ -n "$LATEST_BETA" ] || return 1
 	download "https://developer.android.com$LATEST_BETA" PIXEL_LATEST_HTML
